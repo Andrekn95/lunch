@@ -1,4 +1,4 @@
-export type TransactionStatus = 'pending' | 'approved'
+export type TransactionStatus = 'pending' | 'approved' | 'rejected'
 
 export interface Transaction {
   id: string
