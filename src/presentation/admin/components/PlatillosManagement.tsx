@@ -3,30 +3,39 @@ import {
   CalendarDays,
   CheckCircle2,
   ChefHat,
+  CircleDollarSign,
   ClipboardList,
   Plus,
   TriangleAlert,
   Upload,
   X,
 } from 'lucide-react'
-import type { Dish } from '../../../domain/entities'
+import type { Dish, DishRecipe } from '../../../domain/entities'
 import { DISH_CATEGORIES } from '../../../domain/entities'
 import type { DishInput } from '../../../application/ports/DishRepository'
+import type { ImportDishCostsResult } from '../../../application/use-cases/ImportDishCostsUseCase'
 import type { ImportMenuMatrixResult } from '../../../application/use-cases/ImportMenuMatrixUseCase'
 import {
   deleteDishUseCase,
+  dishRecipeRepository,
   dishRepository,
   importDishesUseCase,
   saveDishUseCase,
 } from '../../../infrastructure/container'
 import { sampleDishes } from '../data/sampleDishes'
+import { CostImportPanel } from './CostImportPanel'
 import { DeleteDishDialog } from './DeleteDishDialog'
 import { DishCatalogTable } from './DishCatalogTable'
+import { DishCostingModal } from './DishCostingModal'
 import { DishEditorModal } from './DishEditorModal'
 import { DishImportPanel } from './DishImportPanel'
 import { MenuMatrixImportPanel } from './MenuMatrixImportPanel'
 
-type PlatillosSection = 'catalog' | 'import' | 'menuImport'
+type PlatillosSection =
+  | 'catalog'
+  | 'import'
+  | 'menuImport'
+  | 'costImport'
 
 interface PlatillosManagementProps {
   onMenuImported: (result: ImportMenuMatrixResult) => void
@@ -53,6 +62,11 @@ const SECTIONS = [
     label: 'Importar menú',
     icon: CalendarDays,
   },
+  {
+    id: 'costImport',
+    label: 'Subir archivo de costos',
+    icon: CircleDollarSign,
+  },
 ] as const
 
 export function PlatillosManagement({
@@ -65,6 +79,9 @@ export function PlatillosManagement({
     useState<PlatillosSection>('catalog')
   const [editorDish, setEditorDish] = useState<Dish | 'new' | null>(null)
   const [deletingDish, setDeletingDish] = useState<Dish | null>(null)
+  const [costingDish, setCostingDish] = useState<Dish | null>(null)
+  const [costingRecipe, setCostingRecipe] =
+    useState<DishRecipe | null>(null)
   const [toast, setToast] = useState<PlatillosToast | null>(null)
 
   useEffect(() => {
@@ -114,6 +131,55 @@ export function PlatillosManagement({
     onMenuImported(result)
   }
 
+  function handleCostsImported(
+    result: ImportDishCostsResult,
+    skippedUnassigned: number,
+  ) {
+    const skippedTotal = skippedUnassigned + result.skippedRecipes
+    const recipesLabel =
+      result.importedRecipes === 1
+        ? '1 receta'
+        : `${result.importedRecipes} recetas`
+    const ingredientsLabel =
+      result.importedIngredients === 1
+        ? '1 ingrediente'
+        : `${result.importedIngredients} ingredientes`
+
+    setToast({
+      tone: result.importedRecipes > 0 ? 'success' : 'danger',
+      message:
+        result.importedRecipes > 0
+          ? `Se importaron ${recipesLabel} con ${ingredientsLabel}.${
+              skippedTotal > 0
+                ? ` ${skippedTotal} ${skippedTotal === 1 ? 'receta quedó' : 'recetas quedaron'} sin asignar.`
+                : ''
+            }`
+          : 'No se pudo importar ninguna receta. Revisa el mapeo de platillos.',
+    })
+  }
+
+  function handleOpenCosting(dish: Dish) {
+    setCostingDish(dish)
+    setCostingRecipe(
+      dishRecipeRepository
+        .listSnapshot()
+        .find((recipe) => recipe.dishId === dish.id) ?? null,
+    )
+  }
+
+  function handleRecipeSaved(recipe: DishRecipe) {
+    setCostingRecipe(recipe)
+    setToast({
+      tone: 'success',
+      message: 'Los costos de la receta se actualizaron correctamente.',
+    })
+  }
+
+  function closeCosting() {
+    setCostingDish(null)
+    setCostingRecipe(null)
+  }
+
   async function handleLoadSamples() {
     try {
       await importDishesUseCase.execute(sampleDishes)
@@ -133,6 +199,11 @@ export function PlatillosManagement({
   const activeCategoryCount = new Set(
     dishes.map((dish) => dish.category),
   ).size
+  const costedDishIds = new Set(
+    dishRecipeRepository
+      .listSnapshot()
+      .map((recipe) => recipe.dishId),
+  )
 
   return (
     <div className="space-y-4">
@@ -205,7 +276,7 @@ export function PlatillosManagement({
       <div
         role="tablist"
         aria-label="Secciones del catálogo de platillos"
-        className="grid gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm sm:grid-cols-3"
+        className="grid gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
       >
         {SECTIONS.map((section) => {
           const Icon = section.icon
@@ -235,9 +306,11 @@ export function PlatillosManagement({
         {activeSection === 'catalog' && (
           <DishCatalogTable
             dishes={dishes}
+            costedDishIds={costedDishIds}
             onCreate={() => setEditorDish('new')}
             onEdit={setEditorDish}
             onDelete={setDeletingDish}
+            onCost={handleOpenCosting}
             onImport={() => setActiveSection('import')}
             onLoadSamples={() => {
               void handleLoadSamples()
@@ -253,6 +326,13 @@ export function PlatillosManagement({
           <MenuMatrixImportPanel
             dishes={dishes}
             onImported={handleMenuImported}
+          />
+        )}
+
+        {activeSection === 'costImport' && (
+          <CostImportPanel
+            dishes={dishes}
+            onImported={handleCostsImported}
           />
         )}
       </div>
@@ -271,6 +351,19 @@ export function PlatillosManagement({
           dish={deletingDish}
           onClose={() => setDeletingDish(null)}
           onConfirm={handleDeleteDish}
+        />
+      )}
+
+      {costingDish && (
+        <DishCostingModal
+          dish={costingDish}
+          recipe={costingRecipe}
+          onClose={closeCosting}
+          onOpenImport={() => {
+            closeCosting()
+            setActiveSection('costImport')
+          }}
+          onRecipeSaved={handleRecipeSaved}
         />
       )}
     </div>

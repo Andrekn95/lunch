@@ -75,10 +75,17 @@ function parseDelimitedText(text: string, delimiter: string): string[][] {
   return rows
 }
 
-export async function readSpreadsheetMatrix(
-  file: File,
-): Promise<unknown[][]> {
-  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+export interface SpreadsheetSheet {
+  name: string
+  rows: unknown[][]
+}
+
+function getFileExtension(file: File): string {
+  return file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+}
+
+function validateSpreadsheetFile(file: File): string {
+  const extension = getFileExtension(file)
 
   if (!ACCEPTED_EXTENSIONS.includes(extension)) {
     throw new Error('Formato no soportado. Sube un archivo .csv o .xlsx (Excel).')
@@ -88,13 +95,51 @@ export async function readSpreadsheetMatrix(
     throw new Error('El archivo supera el tamaño máximo permitido de 10 MB.')
   }
 
+  return extension
+}
+
+function decodeCsv(buffer: ArrayBuffer): string {
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+    return text.includes('\uFFFD')
+      ? new TextDecoder('windows-1252').decode(buffer)
+      : text
+  } catch {
+    return new TextDecoder('windows-1252').decode(buffer)
+  }
+}
+
+export async function readSpreadsheetSheets(
+  file: File,
+): Promise<SpreadsheetSheet[]> {
+  const extension = validateSpreadsheetFile(file)
+
   if (extension === '.csv') {
-    const text = await file.text()
-    return parseDelimitedText(text, detectDelimiter(text))
+    const text = decodeCsv(await file.arrayBuffer())
+    return [
+      {
+        name: file.name,
+        rows: parseDelimitedText(text, detectDelimiter(text)),
+      },
+    ]
   }
 
-  const { readSheet } = await import('read-excel-file/browser')
-  return readSheet(file)
+  const { default: readXlsxFile } = await import(
+    'read-excel-file/browser'
+  )
+  const sheets = await readXlsxFile(file)
+
+  return sheets.map((sheet) => ({
+    name: sheet.sheet,
+    rows: sheet.data,
+  }))
+}
+
+export async function readSpreadsheetMatrix(
+  file: File,
+): Promise<unknown[][]> {
+  const [sheet] = await readSpreadsheetSheets(file)
+  return sheet?.rows ?? []
 }
 
 function escapeCsvField(value: string): string {

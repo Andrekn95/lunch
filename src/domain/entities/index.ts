@@ -8,3 +8,10 @@ export type { Dish, DishCategory } from './dish'
 export { DISH_CATEGORIES } from './dish'
 export type { MenuPlanCell, MenuSlotRow } from './menuPlan'
 export { MENU_CATEGORY_SLOTS, MENU_SLOT_ROWS } from './menuPlan'
+export type { DishRecipe, RecipeIngredient } from './recipe'
+export {
+  getDishRecipeTotalCost,
+  getIngredientRecipeCost,
+  getIngredientUnitCost,
+  getRecipeIngredientsTotalCost,
+} from './recipe'

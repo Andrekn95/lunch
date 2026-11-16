@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   ChefHat,
+  CircleDollarSign,
   Pencil,
   Plus,
   Search,
@@ -16,8 +17,10 @@ import { normalizeText } from '../utils/spreadsheet'
 
 interface DishCatalogTableProps {
   dishes: Dish[]
+  costedDishIds?: Set<string>
   onEdit: (dish: Dish) => void
   onDelete: (dish: Dish) => void
+  onCost: (dish: Dish) => void
   onCreate: () => void
   onImport: () => void
   onLoadSamples: () => void
@@ -25,8 +28,10 @@ interface DishCatalogTableProps {
 
 export function DishCatalogTable({
   dishes,
+  costedDishIds,
   onEdit,
   onDelete,
+  onCost,
   onCreate,
   onImport,
   onLoadSamples,
@@ -202,7 +207,14 @@ export function DishCatalogTable({
               {filteredDishes.map((dish) => (
                 <tr key={dish.id} className="hover:bg-slate-50/70">
                   <td className="px-5 py-3 font-medium text-slate-800">
-                    {dish.name}
+                    <span className="flex items-center gap-2">
+                      {dish.name}
+                      {costedDishIds?.has(dish.id) && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                          Costeado
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-3 py-3">
                     <span
@@ -225,6 +237,26 @@ export function DishCatalogTable({
                         className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       >
                         <Pencil className="size-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onCost(dish)}
+                        aria-label={`Ver costos de ${dish.name}`}
+                        title={
+                          costedDishIds?.has(dish.id)
+                            ? 'Ver ficha de costeo'
+                            : 'Agregar costos y receta'
+                        }
+                        className={`rounded-lg p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                          costedDishIds?.has(dish.id)
+                            ? 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'
+                            : 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-600'
+                        }`}
+                      >
+                        <CircleDollarSign
+                          className="size-4"
+                          aria-hidden="true"
+                        />
                       </button>
                       <button
                         type="button"

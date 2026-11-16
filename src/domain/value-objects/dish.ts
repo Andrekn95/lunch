@@ -15,3 +15,15 @@ export function getDishKey(
 ): string {
   return `${category}|${normalizeDishName(name)}`
 }
+
+const SERVING_PATTERN =
+  /\b\d+(?:[.,]\d+)?\s*(?:onzas?|oz|gramos?|gr|g|kilos?|kg|mililitros?|ml|litros?|lt|l|porciones?|porc|unidades?|uni|und)\b/g
+
+export function getDishMatchKey(name: string): string {
+  return normalizeDishName(name)
+    .replace(/[/|].*$/, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(SERVING_PATTERN, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
